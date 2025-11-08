@@ -1,5 +1,5 @@
 import argparse, sys, os, json
-from .storage import JSONStore
+from assistant.storage import JSONStore
 from .contacts import AddressBook
 from .notes import NotesRepo
 from .tags import TagIndex
