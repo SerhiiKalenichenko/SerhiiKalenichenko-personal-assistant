@@ -1,5 +1,4 @@
 from __future__ import annotations
-from datetime import date
 from typing import Any
 from .models import Contact
 
@@ -11,7 +10,7 @@ class AddressBook:
                 c = Contact(
                     name=raw.get("name", ""),
                     address=raw.get("address"),
-                    phones=raw.get("phones", []),
+                    phones=list(raw.get("phones", [])),
                     email=raw.get("email"),
                     birthday=raw.get("birthday"),
                     id=raw.get("id"),
