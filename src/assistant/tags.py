@@ -10,15 +10,14 @@ class TagIndex:
         for ids in self._map.values():
             ids.discard(note_id)
 
+    # !!! ЦЕЙ МЕТОД ПОВИНЕН БУТИ ВСЕРЕДИНІ КЛАСУ !!!
     def update(self, note_id: str, old_tags: set[str], new_tags: set[str]) -> None:
-        # прибираємо старі
         for t in old_tags:
             k = t.lower()
             if k in self._map:
                 self._map[k].discard(note_id)
                 if not self._map[k]:
                     del self._map[k]
-        # додаємо нові
         self.index(note_id, new_tags)
 
     def search(self, *tags: str) -> set[str]:
@@ -31,18 +30,19 @@ class TagIndex:
         return res
 
     def sort_by_tags(self, notes: list) -> list:
-        """Сортує список нотаток за КІЛЬКІСТЮ тегів, ЗА ЗРОСТАННЯМ.
-        Підтримує як dict-нотатки, так і об'єкти з атрибутом .tags.
+        """Сортує за зростанням кількості тегів.
+        Тай-брейк: за текстом (A..Z). Підтримує dict і об'єкти .text/.tags.
         """
-        def count(n) -> int:
-            if isinstance(n, dict):
-                tags = n.get("tags", [])
-            else:
-                tags = getattr(n, "tags", [])
-            if isinstance(tags, (set, list, tuple)):
-                return len(tags)
-            return 0
-        return sorted(notes, key=count, reverse=False)
+        def grab(n, attr, default):
+            return n.get(attr, default) if isinstance(n, dict) else getattr(n, attr, default)
+
+        def key(n):
+            tags = grab(n, "tags", [])
+            count = len(tags) if isinstance(tags, (set, list, tuple)) else 0
+            text = grab(n, "text", "")
+            return (count, text.lower())
+
+        return sorted(notes, key=key, reverse=False)
 
     def clear(self) -> None:
         self._map.clear()
