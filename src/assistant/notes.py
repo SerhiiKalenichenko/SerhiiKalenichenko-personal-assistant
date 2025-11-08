@@ -7,22 +7,17 @@ class NotesRepo:
         from .models import Note
         self._items: dict[str, Note] = {}
         self._tags = TagIndex()
-
         if data:
             for raw in data:
-                n = Note(
-                    text=raw.get("text", ""),
-                    tags=set(raw.get("tags", [])),
-                    id=raw.get("id"),
-                )
+                n = Note(text=raw.get("text", ""),
+                         tags=set(raw.get("tags", [])),
+                         id=raw.get("id"))
                 self._items[n.id] = n
                 self._tags.index(n.id, n.tags)
 
     def serialize(self) -> list[dict]:
-        return [
-            {"id": n.id, "text": n.text, "tags": sorted(n.tags)}
-            for n in self._items.values()
-        ]
+        return [{"id": n.id, "text": n.text, "tags": sorted(n.tags)}
+                for n in self._items.values()]
 
     def add(self, text: str, tags: set[str] | None = None):
         from .models import Note
@@ -36,12 +31,12 @@ class NotesRepo:
 
     def update(self, note_id: str, *, text: str | None = None, tags: set[str] | None = None):
         n = self._items[note_id]
-        old_tags = n.tags.copy()
+        old = n.tags.copy()
         if text is not None:
             n.text = text
         if tags is not None:
             n.tags = set(tags)
-            self._tags.update(n.id, old_tags, n.tags)
+            self._tags.update(n.id, old, n.tags)
         return n
 
     def remove(self, note_id: str) -> None:
@@ -51,11 +46,9 @@ class NotesRepo:
 
     def search(self, query: str):
         q = query.lower()
-        return [
-            n for n in self._items.values()
-            if q in n.text.lower() or any(q in t.lower() for t in n.tags)
-        ]
+        return [n for n in self._items.values()
+                if q in n.text.lower() or any(q in t.lower() for t in n.tags)]
 
     def sort_by_tags(self) -> list[dict]:
-        # Сортування ЗА ЗРОСТАННЯМ кількості тегів (як очікує тест)
+        # очікування тесту — за зростанням
         return self._tags.sort_by_tags(self.serialize())
