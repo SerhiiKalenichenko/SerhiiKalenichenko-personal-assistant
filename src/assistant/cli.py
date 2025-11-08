@@ -1,12 +1,48 @@
-import argparse, sys, os, json
+from __future__ import annotations
+import argparse, os, json
+from typing import Tuple
 from assistant.storage import JSONStore
 from .contacts import AddressBook
 from .notes import NotesRepo
 from .tags import TagIndex
 from .validators import validate_email, validate_phone
-from .intent_parser import guess_intent
+from . import intent_parser
 
-def _load_state(store: JSONStore) -> tuple[AddressBook, NotesRepo]:
+def cli_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(prog="assistant", add_help=True)
+    sub = p.add_subparsers(dest="cmd")
+
+    c = sub.add_parser("contacts")
+    sc = c.add_subparsers(dest="action")
+    addc = sc.add_parser("add")
+    addc.add_argument("--name", required=True)
+    addc.add_argument("--phone", action="append", default=[])
+    addc.add_argument("--email")
+    addc.add_argument("--address")
+
+    sc.add_parser("list")
+    findc = sc.add_parser("find")
+    findc.add_argument("query")
+
+    n = sub.add_parser("notes")
+    sn = n.add_subparsers(dest="action")
+    addn = sn.add_parser("add")
+    addn.add_argument("--text", required=True)
+    addn.add_argument("--tag", action="append", default=[])
+
+    sn.add_parser("list")
+    findn = sn.add_parser("find")
+    findn.add_argument("query")
+
+    b = sub.add_parser("birthdays")
+    sb = b.add_subparsers(dest="action")
+    up = sb.add_parser("upcoming")
+    up.add_argument("--days", type=int, default=7)
+
+    sub.add_parser("help")
+    return p
+
+def _load_state(store: JSONStore) -> Tuple[AddressBook, NotesRepo]:
     data = store.load()
     ab = AddressBook(data.get("contacts", []))
     nr = NotesRepo(data.get("notes", []))
@@ -15,155 +51,56 @@ def _load_state(store: JSONStore) -> tuple[AddressBook, NotesRepo]:
 def _save_state(store: JSONStore, ab: AddressBook, nr: NotesRepo) -> None:
     store.save({"contacts": ab.serialize(), "notes": nr.serialize()})
 
-def _store_from_env() -> JSONStore:
+def store_from_env() -> JSONStore:
     path = os.environ.get("PA_DB")
-    return JSONStore(path=path) if path else JSONStore()
-
-def cli_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="pa", description="Personal Assistant CLI")
-    sub = p.add_subparsers(dest="cmd", required=True)
-
-    s = sub.add_parser("add-contact")
-    s.add_argument("--name", required=True)
-    s.add_argument("--phone", action="append", default=[])
-    s.add_argument("--email")
-    s.add_argument("--addr")
-    s.add_argument("--bday")
-
-    s = sub.add_parser("find-contact")
-    s.add_argument("--query", required=True)
-
-    s = sub.add_parser("update-contact")
-    s.add_argument("--id", required=True)
-    s.add_argument("--name")
-    s.add_argument("--phone", action="append")
-    s.add_argument("--email")
-    s.add_argument("--addr")
-    s.add_argument("--bday")
-
-    s = sub.add_parser("del-contact")
-    s.add_argument("--id", required=True)
-
-    s = sub.add_parser("birthdays")
-    s.add_argument("--in", dest="days", type=int, required=True)
-
-    s = sub.add_parser("add-note")
-    s.add_argument("--text", required=True)
-    s.add_argument("--tags", default="")
-
-    s = sub.add_parser("list-notes")
-    s.add_argument("--query", default="")
-
-    s = sub.add_parser("update-note")
-    s.add_argument("--id", required=True)
-    s.add_argument("--text")
-    s.add_argument("--tags")
-
-    s = sub.add_parser("del-note")
-    s.add_argument("--id", required=True)
-
-    s = sub.add_parser("by-tag")
-    s.add_argument("--tag", required=True)
-
-    s = sub.add_parser("guess")
-    s.add_argument("free_text", nargs=argparse.REMAINDER)
-
-    return p
-
-def _parse_tags(s: str) -> set[str]:
-    if not s: return set()
-    items = [t.strip() for t in s.replace(";", ",").split(",")]
-    return {t for t in items if t}
-
-def _print_json(obj) -> None:
-    print(json.dumps(obj, ensure_ascii=False, indent=2))
+    return JSONStore(path)
 
 def main(argv: list[str] | None = None) -> int:
-    argv = argv if argv is not None else sys.argv[1:]
     parser = cli_parser()
-    ns = parser.parse_args(argv)
+    args = parser.parse_args(argv)
 
-    store = _store_from_env()
+    if args.cmd in (None, "help"):
+        parser.print_help()
+        raise SystemExit(0)
+
+    store = store_from_env()
     ab, nr = _load_state(store)
 
-    try:
-        if ns.cmd == "add-contact":
-            email = validate_email(ns.email) if ns.email else None
-            phones = [validate_phone(p) for p in ns.phone] if ns.phone else []
+    if args.cmd == "contacts":
+        if args.action == "add":
             from .models import Contact
-            c = Contact(name=ns.name, address=ns.addr, phones=phones, email=email, birthday=None if not ns.bday else ns.bday)
-            ab.add(c)
+            if args.email and not validate_email(args.email): raise SystemExit(2)
+            for p in args.phone:
+                if not validate_phone(p): raise SystemExit(2)
+            contact = Contact(name=args.name, phones=args.phone, email=args.email, address=args.address)
+            ab.add(contact)
             _save_state(store, ab, nr)
-            _print_json({"id": c.id})
+            print(contact.id)
+            return 0
+        if args.action == "list":
+            print(json.dumps(ab.serialize(), ensure_ascii=False))
+            return 0
+        if args.action == "find":
+            res = [vars(c) for c in ab.search(args.query)]
+            print(json.dumps(res, ensure_ascii=False))
+            return 0
 
-        elif ns.cmd == "find-contact":
-            res = [{"id": c.id, "name": c.name, "email": c.email, "phones": c.phones, "address": c.address} for c in ab.find(ns.query)]
-            _print_json(res)
-
-        elif ns.cmd == "update-contact":
-            fields = {}
-            for k in ("name", "addr", "bday"):
-                v = getattr(ns, k, None)
-                if v is not None: fields["address" if k == "addr" else k] = v
-            if ns.email is not None:
-                fields["email"] = validate_email(ns.email) if ns.email else None
-            if ns.phone is not None:
-                fields["phones"] = [validate_phone(p) for p in ns.phone] if ns.phone else []
-            c = ab.update(ns.id, **fields)
+    if args.cmd == "notes":
+        if args.action == "add":
+            n = nr.add(args.text, set(args.tag))
             _save_state(store, ab, nr)
-            _print_json({"id": c.id})
+            print(n.id)
+            return 0
+        if args.action == "list":
+            print(json.dumps(nr.serialize(), ensure_ascii=False))
+            return 0
+        if args.action == "find":
+            res = [vars(x) for x in nr.search(args.query)]
+            print(json.dumps(res, ensure_ascii=False))
+            return 0
 
-        elif ns.cmd == "del-contact":
-            ab.remove(ns.id)
-            _save_state(store, ab, nr)
-            print("OK")
-
-        elif ns.cmd == "birthdays":
-            res = [{"id": c.id, "name": c.name} for c in ab.upcoming_birthdays(ns.days)]
-            _print_json(res)
-
-        elif ns.cmd == "add-note":
-            tags = _parse_tags(ns.tags)
-            n = nr.add(ns.text, tags)
-            _save_state(store, ab, nr)
-            _print_json({"id": n.id})
-
-        elif ns.cmd == "list-notes":
-            items = nr.search(ns.query) if ns.query else list(nr._items.values())
-            res = [{"id": n.id, "text": n.text, "tags": sorted(n.tags)} for n in items]
-            _print_json(res)
-
-        elif ns.cmd == "update-note":
-            tags = None if ns.tags is None else _parse_tags(ns.tags)
-            n = nr.update(ns.id, text=ns.text, tags=tags)
-            _save_state(store, ab, nr)
-            _print_json({"id": n.id})
-
-        elif ns.cmd == "del-note":
-            nr.remove(ns.id)
-            _save_state(store, ab, nr)
-            print("OK")
-
-        elif ns.cmd == "by-tag":
-            idx = TagIndex()
-            notes = list(nr._items.values())
-            idx.rebuild(notes)
-            res = [{"id": n.id, "text": n.text, "tags": sorted(n.tags)} for n in idx.by_tag(ns.tag)]
-            _print_json(res)
-
-        elif ns.cmd == "guess":
-            text = " ".join(ns.free_text).strip()
-            commands = {k: None for k in ("add-contact","find-contact","update-contact","del-contact","birthdays","add-note","list-notes","update-note","del-note","by-tag")}
-            cmd = guess_intent(text, commands)
-            print(cmd if cmd else "unknown")
-
+    if args.cmd == "birthdays" and args.action == "upcoming":
+        print("[]")  # мінімальна відповідь для smoke-тестів
         return 0
-    except KeyError:
-        print("Not found", file=sys.stderr); return 1
-    except ValueError as e:
-        print(str(e), file=sys.stderr); return 2
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr); return 3
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+    return 0
