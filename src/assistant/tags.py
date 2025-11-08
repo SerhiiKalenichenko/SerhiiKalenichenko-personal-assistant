@@ -1,20 +1,22 @@
-from .models import Note
-from collections import defaultdict
-
 class TagIndex:
     def __init__(self):
-        self._idx: dict[str, list[Note]] = defaultdict(list)
+        self._map: dict[str, set[str]] = {}
 
-    def rebuild(self, notes: list[Note]) -> None:
-        self._idx.clear()
-        for n in notes:
-            for t in n.tags:
-                self._idx[t.lower()].append(n)
-        for v in self._idx.values():
-            v.sort(key=lambda n: (n.text.lower(), n.id))
+    def index(self, note_id: str, tags: set[str]) -> None:
+        for t in tags:
+            self._map.setdefault(t.lower(), set()).add(note_id)
 
-    def by_tag(self, tag: str) -> list[Note]:
-        return list(self._idx.get(tag.lower(), []))
+    def remove(self, note_id: str) -> None:
+        for ids in self._map.values():
+            ids.discard(note_id)
 
-    def sort_by_tags(self, notes: list[Note]) -> list[Note]:
-        return sorted(notes, key=lambda n: (sorted([t.lower() for t in n.tags]) or [""], n.text.lower(), n.id))
+    def search(self, *tags: str) -> set[str]:
+        sets = [self._map.get(t.lower(), set()) for t in tags]
+        if not sets: return set()
+        out = sets[0].copy()
+        for s in sets[1:]:
+            out &= s
+        return out
+
+    def clear(self) -> None:
+        self._map.clear()
