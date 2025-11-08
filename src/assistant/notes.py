@@ -36,7 +36,7 @@ class NotesRepo:
             n.text = text
         if tags is not None:
             n.tags = set(tags)
-            self._tags.update(n.id, old, n.tags)
+            self._tags.update(n.id, old, n.tags)   # <-- потрібен update у TagIndex
         return n
 
     def remove(self, note_id: str) -> None:
@@ -50,5 +50,4 @@ class NotesRepo:
                 if q in n.text.lower() or any(q in t.lower() for t in n.tags)]
 
     def sort_by_tags(self) -> list[dict]:
-        # очікування тесту — за зростанням
         return self._tags.sort_by_tags(self.serialize())
