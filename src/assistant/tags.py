@@ -19,6 +19,10 @@ class TagIndex:
                     del self._map[k]
         self.index(note_id, new_tags)
 
+    def by_tag(self, tag: str) -> set[str]:
+        """Повертає всі note_id, які містять вказаний тег."""
+        return self._map.get(tag.lower(), set())
+
     def search(self, *tags: str) -> set[str]:
         groups = [self._map.get(t.lower(), set()) for t in tags]
         if not groups:
@@ -29,9 +33,7 @@ class TagIndex:
         return res
 
     def sort_by_tags(self, notes: list) -> list:
-        """Сортує за зростанням кількості тегів (A→Z).
-        Тай-брейк — за текстом, якщо кількість тегів однакова.
-        """
+        """Сортує за зростанням кількості тегів, потім за текстом."""
         def grab(n, attr, default):
             return n.get(attr, default) if isinstance(n, dict) else getattr(n, attr, default)
 
