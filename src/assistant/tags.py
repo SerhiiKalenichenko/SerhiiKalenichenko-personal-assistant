@@ -13,26 +13,28 @@ class TagIndex:
     def update(self, note_id: str, old_tags: set[str], new_tags: set[str]) -> None:
         # прибираємо старі
         for t in old_tags:
-            key = t.lower()
-            if key in self._map:
-                self._map[key].discard(note_id)
-                if not self._map[key]:
-                    del self._map[key]
+            k = t.lower()
+            if k in self._map:
+                self._map[k].discard(note_id)
+                if not self._map[k]:
+                    del self._map[k]
         # додаємо нові
         self.index(note_id, new_tags)
 
     def search(self, *tags: str) -> set[str]:
-        sets = [self._map.get(t.lower(), set()) for t in tags]
-        if not sets:
+        groups = [self._map.get(t.lower(), set()) for t in tags]
+        if not groups:
             return set()
-        res = sets[0].copy()
-        for s in sets[1:]:
-            res &= s
+        res = groups[0].copy()
+        for g in groups[1:]:
+            res &= g
         return res
 
     def sort_by_tags(self, notes: list) -> list:
-        # Підтримує dict і об'єкти з атрибутом .tags
-        def tag_count(n) -> int:
+        """Сортує список нотаток за КІЛЬКІСТЮ тегів, ЗА ЗРОСТАННЯМ.
+        Підтримує як dict-нотатки, так і об'єкти з атрибутом .tags.
+        """
+        def count(n) -> int:
             if isinstance(n, dict):
                 tags = n.get("tags", [])
             else:
@@ -40,8 +42,7 @@ class TagIndex:
             if isinstance(tags, (set, list, tuple)):
                 return len(tags)
             return 0
-        # ТЕСТ очікує порядок ['A','B'] → зростання
-        return sorted(notes, key=tag_count, reverse=False)
+        return sorted(notes, key=count, reverse=False)
 
     def clear(self) -> None:
         self._map.clear()
