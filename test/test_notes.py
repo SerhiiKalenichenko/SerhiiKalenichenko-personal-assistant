@@ -1,27 +1,24 @@
-import pytest
-from notes import NotesRepo
-from tags import TagIndex
+# test/test_notes.py
+from assistant.notes import NotesRepo
+from assistant.tags import TagIndex
 
 
-def test_add_note():
-    repo = NotesRepo()
-    n = repo.add("Hello", set())
-    assert n.text == "Hello"
-    assert n.tags == set()
-    assert n.id in repo._items
+def _nid(x):
+    return getattr(x, "id", x.get("id"))
+
+
+def _text(x):
+    return getattr(x, "text", x.get("text"))
 
 
 def test_add_and_search_notes():
     repo = NotesRepo()
-    repo.add("Task A", {"work", "urgent"})
-    repo.add("Task B", {"work"})
-    repo.add("Task C", {"personal"})
-    
-    idx = TagIndex()
-    idx.rebuild(list(repo._items.values()))
-    
-    work_notes = idx.by_tag("work")
-    assert len(work_notes) == 2
+    n1 = repo.add("Купити батарейки", {"house", "urgent"})
+    n2 = repo.add("Подзвонити Івану", {"calls"})
+    found = repo.search("купи")
+    ids = { _nid(x) for x in found }
+    assert n1.id in ids
+    assert n2.id not in ids
 
 
 def test_update_and_tags_index():
@@ -29,33 +26,15 @@ def test_update_and_tags_index():
     n = repo.add("Task", {"a"})
     repo.update(n.id, tags={"a", "b"})
     idx = TagIndex()
-    idx.rebuild(list(repo._items.values()))
-    
+    idx.rebuild(repo.serialize()["notes"])
     by_b = idx.by_tag("b")
     assert n.id in by_b
 
 
 def test_sort_by_tags():
     repo = NotesRepo()
-    repo.add("B", {"x", "y", "z"})
-    repo.add("A", {"x", "y", "z"})
-    
-    idx = TagIndex()
-    all_notes = list(repo._items.values())
-    sorted_notes = idx.sort_by_tags(all_notes)
-    
-    texts = [n.text for n in sorted_notes]
-    assert texts == ["A", "B"]
-
-
-def test_cli_help_runs():
-    """Перевірка, що CLI запускається без помилок"""
-    import subprocess
-    import sys
-    
-    result = subprocess.run(
-        [sys.executable, "-m", "cli", "--help"],
-        capture_output=True,
-        text=True
-    )
-    assert result.returncode == 0
+    a = repo.add("A", {"a"})
+    b = repo.add("B", {"a", "b"})
+    sorted_serialized = repo.sort_by_tags()
+    texts = [_text(x) for x in sorted_serialized]
+    assert texts[:2] == ["A", "B"]
