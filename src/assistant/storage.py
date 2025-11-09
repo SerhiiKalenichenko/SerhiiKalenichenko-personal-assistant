@@ -1,8 +1,9 @@
-import json, os, tempfile, shutil, stat
+from __future__ import annotations
+import json, os, stat
 from typing import Any
 
 class JSONStore:
-    def __init__(self, path: str | None = None):
+    def __init__(self, path: str | None = None) -> None:
         home = os.path.expanduser("~")
         base = os.path.join(home, ".personal_assistant")
         os.makedirs(base, exist_ok=True)
@@ -22,25 +23,9 @@ class JSONStore:
             return json.load(f)
 
     def save(self, data: dict[str, Any]) -> None:
-        d = os.path.dirname(self.path)
-        fd, tmp = tempfile.mkstemp(dir=d)
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-            self._rotate_backup()
-            os.replace(tmp, self.path)
-            try:
-                os.chmod(self.path, stat.S_IRUSR | stat.S_IWUSR)
-            except Exception:
-                pass
-        except Exception:
-            try: os.remove(tmp)
-            except OSError: pass
-            raise
+        with open(self.path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
 
-    def _rotate_backup(self, keep: int = 3) -> None:
-        for i in range(keep, 0, -1):
-            src = f"{self.path}.bak{i-1}" if i > 1 else self.path
-            dst = f"{self.path}.bak{i}"
-            if os.path.exists(src):
-                shutil.copy2(src, dst)
+    @staticmethod
+    def serialize(items: list) -> list[dict]:
+        return [i.serialize() for i in items]
