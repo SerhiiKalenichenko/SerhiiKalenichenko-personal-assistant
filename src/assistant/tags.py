@@ -43,7 +43,7 @@ class TagIndex:
             text = grab(n, "text", "")
             return (count, text.lower())
         
-        return sorted(notes, key=key, reverse=False)
+        return sorted(notes, key=key)
     
     def rebuild(self, notes: list) -> None:
         """Перебудовує індекс на основі списку нотаток."""
