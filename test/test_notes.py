@@ -1,14 +1,13 @@
-# test/test_notes.py
 from assistant.notes import NotesRepo
 from assistant.tags import TagIndex
 
 
 def _nid(x):
-    return getattr(x, "id", x.get("id"))
+    return getattr(x, "id", x.get("id") if isinstance(x, dict) else None)
 
 
 def _text(x):
-    return getattr(x, "text", x.get("text"))
+    return getattr(x, "text", x.get("text") if isinstance(x, dict) else None)
 
 
 def test_add_and_search_notes():
@@ -16,7 +15,7 @@ def test_add_and_search_notes():
     n1 = repo.add("Купити батарейки", {"house", "urgent"})
     n2 = repo.add("Подзвонити Івану", {"calls"})
     found = repo.search("купи")
-    ids = { _nid(x) for x in found }
+    ids = {_nid(x) for x in found}
     assert n1.id in ids
     assert n2.id not in ids
 
@@ -26,7 +25,10 @@ def test_update_and_tags_index():
     n = repo.add("Task", {"a"})
     repo.update(n.id, tags={"a", "b"})
     idx = TagIndex()
-    idx.rebuild(repo.serialize()["notes"])
+
+    # rebuild приймає список нотаток (list[Note])
+    idx.rebuild(list(repo._items.values()))
+
     by_b = idx.by_tag("b")
     assert n.id in by_b
 
@@ -35,6 +37,6 @@ def test_sort_by_tags():
     repo = NotesRepo()
     a = repo.add("A", {"a"})
     b = repo.add("B", {"a", "b"})
-    sorted_serialized = repo.sort_by_tags()
-    texts = [_text(x) for x in sorted_serialized]
+    sorted_notes = repo.sort_by_tags()
+    texts = [_text(x) for x in sorted_notes]
     assert texts[:2] == ["A", "B"]
