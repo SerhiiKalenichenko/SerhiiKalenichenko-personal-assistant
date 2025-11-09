@@ -1,53 +1,48 @@
 from __future__ import annotations
-from typing import Iterable
+from typing import Optional
+from .models import Note
 from .tags import TagIndex
 
 class NotesRepo:
-    def __init__(self, data: Iterable[dict] | None = None):
-        from .models import Note
+    def __init__(self) -> None:
         self._items: dict[str, Note] = {}
         self._tags = TagIndex()
-        if data:
-            for raw in data:
-                n = Note(text=raw.get("text", ""),
-                         tags=set(raw.get("tags", [])),
-                         id=raw.get("id"))
-                self._items[n.id] = n
-                self._tags.index(n.id, n.tags)
 
-    def serialize(self) -> list[dict]:
-        return [{"id": n.id, "text": n.text, "tags": sorted(n.tags)}
-                for n in self._items.values()]
-
-    def add(self, text: str, tags: set[str] | None = None):
-        from .models import Note
-        n = Note(text=text, tags=tags or set())
+    def add(self, text: str, tags: Optional[set[str]] = None) -> Note:
+        n = Note(text=text, tags=set(tags or set()))
         self._items[n.id] = n
         self._tags.index(n.id, n.tags)
         return n
 
-    def get(self, note_id: str):
-        return self._items[note_id]
+    def get(self, note_id: str) -> Optional[Note]:
+        return self._items.get(note_id)
 
-    def update(self, note_id: str, *, text: str | None = None, tags: set[str] | None = None):
-        n = self._items[note_id]
-        old = n.tags.copy()
+    def search(self, query: str) -> list[Note]:
+        q = (query or "").lower()
+        return [n for n in self._items.values()
+                if q in n.text.lower() or any(q in t.lower() for t in n.tags)]
+
+    def update(self, note_id: str, *, text: Optional[str] = None, tags: Optional[set[str]] = None) -> Optional[Note]:
+        n = self._items.get(note_id)
+        if not n:
+            return None
+        old_tags = set(n.tags)
         if text is not None:
             n.text = text
         if tags is not None:
             n.tags = set(tags)
-            self._tags.update(n.id, old, n.tags)   # <-- потрібен update у TagIndex
+            self._tags.update(n.id, old_tags, n.tags)
         return n
 
-    def remove(self, note_id: str) -> None:
-        if note_id in self._items:
-            self._tags.remove(note_id)
-            del self._items[note_id]
-
-    def search(self, query: str):
-        q = query.lower()
-        return [n for n in self._items.values()
-                if q in n.text.lower() or any(q in t.lower() for t in n.tags)]
+    def remove(self, note_id: str) -> bool:
+        n = self._items.pop(note_id, None)
+        if not n:
+            return False
+        self._tags.remove(note_id)
+        return True
 
     def sort_by_tags(self) -> list[dict]:
-        return self._tags.sort_by_tags(self.serialize())
+        return self._tags.sort_by_tags([n.serialize() for n in self._items.values()])
+
+    def serialize(self) -> list[dict]:
+        return [n.serialize() for n in self._items.values()]
