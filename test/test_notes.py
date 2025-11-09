@@ -5,8 +5,8 @@ def test_add_and_search_notes():
     repo = NotesRepo()
     n1 = repo.add("Купити батарейки", {"house", "urgent"})
     n2 = repo.add("Подзвонити Івану", {"calls"})
-    assert any(n.id == n1.id for n in repo.search("батар"))
-    assert any(n.id == n2.id for n in repo.search("Іван"))
+    assert any(n.id == n1.id for n in repo.search("бат"))
+    assert any(n.id == n2.id for n in repo.search("дзвон"))
 
 def test_update_and_tags_index():
     repo = NotesRepo()
@@ -19,8 +19,7 @@ def test_update_and_tags_index():
 
 def test_sort_by_tags():
     repo = NotesRepo()
-    n1 = repo.add("B", {"b"})
-    n2 = repo.add("A", {"a"})
-    idx = TagIndex()
-    sorted_notes = idx.sort_by_tags([n1, n2])
-    assert [n.text for n in sorted_notes] == ["A", "B"]
+    repo.add("A", {"a"})
+    repo.add("B", {"a", "b"})
+    sorted_serialized = repo.sort_by_tags()
+    assert [x["text"] for x in sorted_serialized][:2] == ["B", "A"]
