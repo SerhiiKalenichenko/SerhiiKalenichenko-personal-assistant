@@ -1,31 +1,33 @@
-from __future__ import annotations
-import json, os, stat
-from typing import Any
+import os, pickle, tempfile
+from dataclasses import asdict
+from assistant.addressbook import AddressBook
+from assistant.notes import Notebook
 
-class JSONStore:
-    def __init__(self, path: str | None = None) -> None:
-        home = os.path.expanduser("~")
-        base = os.path.join(home, ".personal_assistant")
-        os.makedirs(base, exist_ok=True)
-        self.path = path or os.path.join(base, "db.json")
-        if not os.path.exists(self.path):
-            self._chmod_base(base)
-            self.save({"contacts": [], "notes": []})
+DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
+os.makedirs(DATA_DIR, exist_ok=True)
+DB_FILE = os.path.join(DATA_DIR, "storage.bin")
 
-    def _chmod_base(self, base: str) -> None:
+class Storage:
+    def __init__(self):
+        self.ab = AddressBook()
+        self.nb = Notebook()
+        self.load()
+
+    def load(self):
+        if not os.path.exists(DB_FILE):
+            return
+        with open(DB_FILE, "rb") as f:
+            payload = pickle.load(f)
+        self.ab.data = payload.get("ab", {})
+        self.nb.items = payload.get("nb", [])
+
+    def save(self):
+        payload = {"ab": self.ab.data, "nb": self.nb.items}
+        fd, tmp = tempfile.mkstemp(dir=DATA_DIR, prefix="storage.", suffix=".tmp")
         try:
-            os.chmod(base, stat.S_IRWXU)
-        except Exception:
-            pass
-
-    def load(self) -> dict[str, Any]:
-        with open(self.path, "r", encoding="utf-8") as f:
-            return json.load(f)
-
-    def save(self, data: dict[str, Any]) -> None:
-        with open(self.path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-
-    @staticmethod
-    def serialize(items: list) -> list[dict]:
-        return [i.serialize() for i in items]
+            with os.fdopen(fd, "wb") as f:
+                pickle.dump(payload, f)
+            os.replace(tmp, DB_FILE)
+        finally:
+            if os.path.exists(tmp):
+                os.remove(tmp)
