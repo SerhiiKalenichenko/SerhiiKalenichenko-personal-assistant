@@ -1,9 +1,11 @@
-import os, pickle, tempfile
-from dataclasses import asdict
+import os
+import pickle
+import tempfile
 from assistant.addressbook import AddressBook
 from assistant.notes import Notebook
 
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
+DATA_DIR = os.path.join(ROOT_DIR, "data")
 os.makedirs(DATA_DIR, exist_ok=True)
 DB_FILE = os.path.join(DATA_DIR, "storage.bin")
 
@@ -30,4 +32,7 @@ class Storage:
             os.replace(tmp, DB_FILE)
         finally:
             if os.path.exists(tmp):
-                os.remove(tmp)
+                try:
+                    os.remove(tmp)
+                except OSError:
+                    pass
