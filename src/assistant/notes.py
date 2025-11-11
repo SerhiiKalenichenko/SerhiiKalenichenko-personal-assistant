@@ -1,48 +1,59 @@
-from __future__ import annotations
-from typing import Optional
-from .models import Note
-from .tags import TagIndex
+from assistant.models import Note
 
-class NotesRepo:
-    def __init__(self) -> None:
-        self._items: dict[str, Note] = {}
-        self._tags = TagIndex()
+class Notebook:
+    def __init__(self):
+        self.items: list[Note] = []
 
-    def add(self, text: str, tags: Optional[set[str]] = None) -> Note:
-        n = Note(text=text, tags=set(tags or set()))
-        self._items[n.id] = n
-        self._tags.index(n.id, n.tags)
+    def add(self, text: str):
+        n = Note(text=text)
+        self.items.append(n)
         return n
 
-    def get(self, note_id: str) -> Optional[Note]:
-        return self._items.get(note_id)
+    def remove(self, idx: int) -> bool:
+        if 0 <= idx < len(self.items):
+            del self.items[idx]
+            return True
+        return False
 
-    def search(self, query: str) -> list[Note]:
-        q = (query or "").lower()
-        return [n for n in self._items.values()
-                if q in n.text.lower() or any(q in t.lower() for t in n.tags)]
+    def search(self, needle: str):
+        needle = needle.lower()
+        return [n for n in self.items if needle in n.text.lower() or any(needle in t.lower() for t in n.tags)]
 
-    def update(self, note_id: str, *, text: Optional[str] = None, tags: Optional[set[str]] = None) -> Optional[Note]:
-        n = self._items.get(note_id)
-        if not n:
-            return None
-        old_tags = set(n.tags)
-        if text is not None:
-            n.text = text
-        if tags is not None:
-            n.tags = set(tags)
-            self._tags.update(n.id, old_tags, n.tags)
-        return n
+def add_note(db, *words):
+    text = " ".join(words)
+    db.nb.add(text)
+    db.save()
+    return "Note added."
 
-    def remove(self, note_id: str) -> bool:
-        n = self._items.pop(note_id, None)
-        if not n:
-            return False
-        self._tags.remove(note_id)
-        return True
+def list_notes(db):
+    if not db.nb.items:
+        return "No notes."
+    lines = []
+    for i, n in enumerate(db.nb.items, 1):
+        tag_str = f" [{', '.join(n.tags)}]" if n.tags else ""
+        lines.append(f"{i}. {n.text}{tag_str}")
+    return "\n".join(lines)
 
-    def sort_by_tags(self) -> list[dict]:
-        return self._tags.sort_by_tags([n.serialize() for n in self._items.values()])
+def remove_note(db, index: str):
+    ok = db.nb.remove(int(index) - 1)
+    if ok:
+        db.save()
+    return "Removed." if ok else "Not found."
 
-    def serialize(self) -> list[dict]:
-        return [n.serialize() for n in self._items.values()]
+def tag_note(db, index: str, *tags):
+    i = int(index) - 1
+    if 0 <= i < len(db.nb.items):
+        note = db.nb.items[i]
+        for t in tags:
+            if t not in note.tags:
+                note.tags.append(t)
+        db.save()
+        return "Tagged."
+    return "Not found."
+
+def search_notes(db, *words):
+    needle = " ".join(words)
+    items = db.nb.search(needle)
+    if not items:
+        return "No matches."
+    return "\n".join(n.text for n in items)
