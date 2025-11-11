@@ -16,14 +16,25 @@ class Storage:
         self.load()
 
     def load(self):
+        """Безпечне завантаження даних із файлу."""
         if not os.path.exists(DB_FILE):
             return
-        with open(DB_FILE, "rb") as f:
-            payload = pickle.load(f)
+        try:
+            with open(DB_FILE, "rb") as f:
+                # Якщо файл порожній — зчитування pickle викличе EOFError
+                if os.path.getsize(DB_FILE) == 0:
+                    return
+                payload = pickle.load(f)
+        except (EOFError, pickle.UnpicklingError):
+            # Якщо файл зіпсований або порожній — створюємо новий
+            print("[Warning] storage.bin corrupted or empty. Recreating...")
+            self.save()
+            return
         self.ab.data = payload.get("ab", {})
         self.nb.items = payload.get("nb", [])
 
     def save(self):
+        """Атомарне збереження даних."""
         payload = {"ab": self.ab.data, "nb": self.nb.items}
         fd, tmp = tempfile.mkstemp(dir=DATA_DIR, prefix="storage.", suffix=".tmp")
         try:
